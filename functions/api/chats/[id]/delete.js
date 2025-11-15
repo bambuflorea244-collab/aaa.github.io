@@ -1,5 +1,5 @@
 // functions/api/chats/[id]/delete.js
-import { requireAuth, getAttachmentsMeta } from "../../../_utils";
+import { requireAuth, getAttachmentsMeta } from "../../_utils";
 
 export async function onRequestPost(context) {
   const { env, request, params } = context;
@@ -9,36 +9,21 @@ export async function onRequestPost(context) {
   const chatId = params.id;
 
   try {
-    const chat = await env.DB.prepare(
-      "SELECT id FROM chats WHERE id=?"
-    ).bind(chatId).first();
-
-    if (!chat) {
-      return new Response("Chat not found", { status: 404 });
-    }
-
-    // delete files from R2
     const attachments = await getAttachmentsMeta(env, chatId);
+    // delete R2 objects
     for (const a of attachments) {
       try {
         await env.FILES.delete(a.r2_key);
-      } catch (err) {
-        console.error("Failed to delete R2 object", a.r2_key, err);
+      } catch (e) {
+        console.warn("Failed to delete R2 object", a.r2_key, e);
       }
     }
 
-    // delete rows from DB (attachments/messages cascade)
-    await env.DB.prepare(
-      "DELETE FROM messages WHERE chat_id=?"
-    ).bind(chatId).run();
-
-    await env.DB.prepare(
-      "DELETE FROM attachments WHERE chat_id=?"
-    ).bind(chatId).run();
-
-    await env.DB.prepare(
-      "DELETE FROM chats WHERE id=?"
-    ).bind(chatId).run();
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM attachments WHERE chat_id=?").bind(chatId),
+      env.DB.prepare("DELETE FROM messages WHERE chat_id=?").bind(chatId),
+      env.DB.prepare("DELETE FROM chats WHERE id=?").bind(chatId)
+    ]);
 
     return Response.json({ ok: true });
   } catch (err) {
