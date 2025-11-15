@@ -1,50 +1,77 @@
 // functions/_utils.js
-// Shared helpers for auth, settings, and attachments
 
+// Simple auth helper using sessions table
 export async function requireAuth(env, request) {
-  const auth = request.headers.get("Authorization") || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+  const authHeader = request.headers.get("Authorization") || "";
+  const token = authHeader.startsWith("Bearer ")
+    ? authHeader.slice("Bearer ".length)
+    : null;
+
   if (!token) {
-    return { ok: false, response: new Response("Unauthorized", { status: 401 }) };
+    return {
+      ok: false,
+      response: new Response("Unauthorized", { status: 401 })
+    };
   }
 
-  const session = await env.DB.prepare(
-    "SELECT token FROM sessions WHERE token = ?"
-  ).bind(token).first();
+  try {
+    const row = await env.DB.prepare(
+      "SELECT token FROM sessions WHERE token=?"
+    )
+      .bind(token)
+      .first();
 
-  if (!session) {
-    return { ok: false, response: new Response("Unauthorized", { status: 401 }) };
+    if (!row) {
+      return {
+        ok: false,
+        response: new Response("Unauthorized", { status: 401 })
+      };
+    }
+
+    return { ok: true, token };
+  } catch (err) {
+    console.error("Auth check error", err);
+    return {
+      ok: false,
+      response: new Response("Auth error", { status: 500 })
+    };
   }
-
-  return { ok: true, token };
 }
 
+// Settings helpers
 export async function getSetting(env, key) {
   const row = await env.DB.prepare(
-    "SELECT value FROM settings WHERE key = ?"
-  ).bind(key).first();
+    "SELECT value FROM settings WHERE key=?"
+  )
+    .bind(key)
+    .first();
   return row ? row.value : null;
 }
 
 export async function setSetting(env, key, value) {
   const now = Math.floor(Date.now() / 1000);
   await env.DB.prepare(
-    "INSERT INTO settings (key, value, created_at, updated_at) VALUES (?, ?, ?, ?) " +
-    "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at"
+    `
+    INSERT INTO settings (key, value, created_at, updated_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at
+  `
   )
     .bind(key, value, now, now)
     .run();
 }
 
-// Attachments metadata
+// Attachments meta helper
 export async function getAttachmentsMeta(env, chatId) {
   const { results } = await env.DB.prepare(
-    "SELECT id, chat_id, name, mime_type, r2_key, created_at FROM attachments WHERE chat_id=? ORDER BY created_at ASC"
-  ).bind(chatId).all();
+    "SELECT id, name, mime_type, r2_key, created_at FROM attachments WHERE chat_id=? ORDER BY created_at ASC"
+  )
+    .bind(chatId)
+    .all();
   return results || [];
 }
 
-// ArrayBuffer -> base64 for inlineData
+// small helper for base64 encoding ArrayBuffer
 export function arrayBufferToBase64(buffer) {
   let binary = "";
   const bytes = new Uint8Array(buffer);
