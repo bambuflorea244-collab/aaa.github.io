@@ -1,5 +1,5 @@
 // functions/api/folders/index.js
-import { requireAuth } from "../../_utils";
+import { requireAuth } from "../_utils";
 
 export async function onRequestGet(context) {
   const { env, request } = context;
@@ -33,8 +33,10 @@ export async function onRequestPost(context) {
 
     const id = crypto.randomUUID();
     await env.DB.prepare(
-      "INSERT INTO folders (id, name, parent_id) VALUES (?, ?, ?)"
-    ).bind(id, name, parentId).run();
+      "INSERT INTO folders (id, name, parent_id, created_at) VALUES (?, ?, ?, strftime('%s','now'))"
+    )
+      .bind(id, name, parentId)
+      .run();
 
     return Response.json({ id, name, parent_id: parentId });
   } catch (err) {
