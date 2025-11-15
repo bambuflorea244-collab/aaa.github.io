@@ -1,5 +1,5 @@
 // functions/api/chats/[id]/settings.js
-import { requireAuth } from "../../../_utils";
+import { requireAuth } from "../../_utils";
 
 function generateChatApiKey() {
   return "chat_" + crypto.randomUUID().replace(/-/g, "");
@@ -15,7 +15,9 @@ export async function onRequestGet(context) {
   try {
     const row = await env.DB.prepare(
       "SELECT id, title, folder_id, api_key, system_prompt, created_at FROM chats WHERE id=?"
-    ).bind(chatId).first();
+    )
+      .bind(chatId)
+      .first();
 
     if (!row) {
       return new Response("Chat not found", { status: 404 });
@@ -68,11 +70,15 @@ export async function onRequestPost(context) {
 
     await env.DB.prepare(
       `UPDATE chats SET ${updates.join(", ")} WHERE id=?`
-    ).bind(...values).run();
+    )
+      .bind(...values)
+      .run();
 
     const row = await env.DB.prepare(
       "SELECT id, title, folder_id, api_key, system_prompt, created_at FROM chats WHERE id=?"
-    ).bind(chatId).first();
+    )
+      .bind(chatId)
+      .first();
 
     return Response.json(row);
   } catch (err) {
