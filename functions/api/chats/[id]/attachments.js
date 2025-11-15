@@ -1,7 +1,5 @@
 // functions/api/chats/[id]/attachments.js
-import { requireAuth, getAttachmentsMeta } from "../../../_utils";
-
-const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB
+import { requireAuth } from "../../_utils";
 
 export async function onRequestGet(context) {
   const { env, request, params } = context;
@@ -11,18 +9,15 @@ export async function onRequestGet(context) {
   const chatId = params.id;
 
   try {
-    const chat = await env.DB.prepare(
-      "SELECT id FROM chats WHERE id=?"
-    ).bind(chatId).first();
-    if (!chat) {
-      return new Response("Chat not found", { status: 404 });
-    }
-
-    const attachments = await getAttachmentsMeta(env, chatId);
-    return Response.json(attachments);
+    const { results } = await env.DB.prepare(
+      "SELECT id, chat_id, name, mime_type, created_at FROM attachments WHERE chat_id=? ORDER BY created_at ASC"
+    )
+      .bind(chatId)
+      .all();
+    return Response.json(results || []);
   } catch (err) {
-    console.error("GET /attachments error", err);
-    return new Response("Failed to fetch attachments", { status: 500 });
+    console.error("GET attachments error", err);
+    return new Response("Failed to load attachments", { status: 500 });
   }
 }
 
@@ -34,50 +29,40 @@ export async function onRequestPost(context) {
   const chatId = params.id;
 
   try {
-    const chat = await env.DB.prepare(
-      "SELECT id FROM chats WHERE id=?"
-    ).bind(chatId).first();
-    if (!chat) {
-      return new Response("Chat not found", { status: 404 });
-    }
-
-    const formData = await request.formData();
-    const file = formData.get("file");
-
+    const form = await request.formData();
+    const file = form.get("file");
     if (!file || typeof file === "string") {
-      return new Response("No file uploaded", { status: 400 });
+      return new Response("No file", { status: 400 });
     }
 
-    const size = file.size;
-    if (size > MAX_FILE_BYTES) {
-      return new Response("File too large (max 15MB)", { status: 400 });
-    }
+    const arrayBuffer = await file.arrayBuffer();
+    const key =
+      chatId +
+      "/" +
+      Date.now() +
+      "-" +
+      Math.random().toString(36).slice(2) +
+      "-" +
+      file.name;
 
-    const mime = file.type || "application/octet-stream";
-    const name = file.name || "file";
+    await env.FILES.put(key, arrayBuffer);
 
-    const key = `${chatId}/${Date.now()}-${name}`;
-
-    const buffer = await file.arrayBuffer();
-    await env.FILES.put(key, buffer);
-
+    const now = Math.floor(Date.now() / 1000);
     await env.DB.prepare(
-      "INSERT INTO attachments (chat_id, name, mime_type, r2_key) VALUES (?, ?, ?, ?)"
-    ).bind(chatId, name, mime, key).run();
+      "INSERT INTO attachments (chat_id, name, mime_type, r2_key, created_at) VALUES (?, ?, ?, ?, ?)"
+    )
+      .bind(chatId, file.name, file.type || "application/octet-stream", key, now)
+      .run();
 
     const row = await env.DB.prepare(
-      "SELECT last_insert_rowid() AS id"
-    ).first();
+      "SELECT id, chat_id, name, mime_type, created_at FROM attachments WHERE chat_id=? AND r2_key=?"
+    )
+      .bind(chatId, key)
+      .first();
 
-    return Response.json({
-      id: row.id,
-      chat_id: chatId,
-      name,
-      mime_type: mime,
-      r2_key: key
-    });
+    return Response.json(row);
   } catch (err) {
-    console.error("POST /attachments error", err);
+    console.error("POST attachments error", err);
     return new Response("Failed to upload attachment", { status: 500 });
   }
 }
