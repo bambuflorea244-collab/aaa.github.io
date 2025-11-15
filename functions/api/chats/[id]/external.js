@@ -1,19 +1,15 @@
 // functions/api/chats/[id]/external.js
-// External API for a single chat, authenticated via per-chat API key.
-// This is what you'll call from PythonAnywhere.
-
 import {
   getSetting,
   getAttachmentsMeta,
   arrayBufferToBase64
-} from "../../../_utils";
+} from "../../_utils";
 
 const MODEL = "gemini-2.5-flash";
 
 async function getMessages(env, chatId, limit = 40) {
   const { results } = await env.DB.prepare(
-    "SELECT role, content, created_at FROM messages WHERE chat_id=? " +
-      "ORDER BY created_at ASC LIMIT ?"
+    "SELECT role, content, created_at FROM messages WHERE chat_id=? ORDER BY created_at ASC LIMIT ?"
   )
     .bind(chatId, limit)
     .all();
@@ -21,10 +17,11 @@ async function getMessages(env, chatId, limit = 40) {
 }
 
 async function storeMessage(env, chatId, role, content) {
+  const now = Math.floor(Date.now() / 1000);
   await env.DB.prepare(
-    "INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)"
+    "INSERT INTO messages (chat_id, role, content, created_at) VALUES (?, ?, ?, ?)"
   )
-    .bind(chatId, role, content)
+    .bind(chatId, role, content, now)
     .run();
 }
 
@@ -75,7 +72,6 @@ async function buildAttachmentPartsFromExisting(env, chatId) {
   return parts;
 }
 
-// Save new attachments coming from API (base64) into R2 + DB
 async function saveNewAttachmentsFromApi(env, chatId, attachmentsPayload) {
   if (!Array.isArray(attachmentsPayload)) return [];
 
@@ -96,8 +92,10 @@ async function saveNewAttachmentsFromApi(env, chatId, attachmentsPayload) {
     await env.FILES.put(key, buffer);
 
     await env.DB.prepare(
-      "INSERT INTO attachments (chat_id, name, mime_type, r2_key) VALUES (?, ?, ?, ?)"
-    ).bind(chatId, filename, mime, key).run();
+      "INSERT INTO attachments (chat_id, name, mime_type, r2_key, created_at) VALUES (?, ?, ?, ?, strftime('%s','now'))"
+    )
+      .bind(chatId, filename, mime, key)
+      .run();
 
     saved.push({ filename, mime, key });
   }
@@ -137,20 +135,20 @@ export async function onRequestPost(context) {
       return new Response("Message is required", { status: 400 });
     }
 
-    // Save new attachments coming via API
     await saveNewAttachmentsFromApi(env, chatId, attachmentsPayload);
 
-    // Build history + existing attachments
     const history = await getMessages(env, chatId, 40);
     const contents = history.map((m) => ({
       role: m.role === "model" ? "model" : "user",
       parts: [{ text: m.content }]
     }));
 
-    const attachmentParts = await buildAttachmentPartsFromExisting(env, chatId);
+    const attachmentParts = await buildAttachmentPartsFromExisting(
+      env,
+      chatId
+    );
     contents.push(...attachmentParts);
 
-    // System prompt (if any) at the beginning
     if (chat.system_prompt) {
       contents.unshift({
         role: "system",
@@ -158,13 +156,11 @@ export async function onRequestPost(context) {
       });
     }
 
-    // Current user message
     contents.push({
       role: "user",
       parts: [{ text: message }]
     });
 
-    // Memory ON by design: we always store conversations
     await storeMessage(env, chatId, "user", message);
 
     const apiKey = await getSetting(env, "gemini_api_key");
