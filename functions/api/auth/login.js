@@ -1,30 +1,34 @@
-// functions/api/auth/login.js
-
 export async function onRequestPost(context) {
-  const { env, request } = context;
+  const { request, env } = context;
 
-  try {
-    const body = await request.json();
-    const password = (body.password || "").toString();
+  const { password } = await request.json();
 
-    const expected = env.MASTER_PASSWORD || "";
-    if (!expected || password !== expected) {
-      return new Response("Invalid password", { status: 401 });
-    }
+  // Read secret from Cloudflare Pages environment
+  const master = env.MASTER_PASSWORD;
 
-    const token = crypto.randomUUID();
-    const now = Math.floor(Date.now() / 1000);
-    const expires = now + 60 * 60 * 24 * 7; // 7 days
-
-    await env.DB.prepare(
-      "INSERT INTO sessions (token, created_at, expires_at) VALUES (?, ?, ?)"
-    )
-      .bind(token, now, expires)
-      .run();
-
-    return Response.json({ token });
-  } catch (err) {
-    console.error("auth/login error", err);
-    return new Response("Internal error", { status: 500 });
+  if (!master) {
+    return new Response(
+      JSON.stringify({ error: "MASTER_PASSWORD missing in environment." }),
+      { status: 500 }
+    );
   }
+
+  if (password !== master) {
+    return new Response(
+      JSON.stringify({ error: "Invalid password" }),
+      { status: 401 }
+    );
+  }
+
+  // Create a simple session token
+  const token = crypto.randomUUID();
+
+  // Store the session in Cloudflare D1
+  await env.DB.prepare(
+    "INSERT INTO sessions (token, created_at) VALUES (?, strftime('%s','now'))"
+  ).bind(token).run();
+
+  return new Response(JSON.stringify({ token }), {
+    headers: { "Content-Type": "application/json" },
+  });
 }
