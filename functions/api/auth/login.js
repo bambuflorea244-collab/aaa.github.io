@@ -1,34 +1,54 @@
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  const { password } = await request.json();
+  // 1. Read JSON body safely
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "Invalid JSON body." }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
 
-  // Read secret from Cloudflare Pages environment
-  const master = env.MASTER_PASSWORD;
+  // 2. Normalize password and MASTER_PASSWORD (trim spaces)
+  const password = (body.password ?? "").toString().trim();
+  const masterRaw = env.MASTER_PASSWORD;
+  const master = (masterRaw ?? "").toString().trim();
 
+  // 3. If MASTER_PASSWORD is missing, tell us clearly
   if (!master) {
     return new Response(
-      JSON.stringify({ error: "MASTER_PASSWORD missing in environment." }),
-      { status: 500 }
+      JSON.stringify({
+        error:
+          "MASTER_PASSWORD is NOT set in Cloudflare. Go to Workers & Pages → your project → Settings → Variables and add it."
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 
+  // 4. Compare
   if (password !== master) {
     return new Response(
-      JSON.stringify({ error: "Invalid password" }),
-      { status: 401 }
+      JSON.stringify({ error: "Invalid password." }),
+      { status: 401, headers: { "Content-Type": "application/json" } }
     );
   }
 
-  // Create a simple session token
+  // 5. Create session
   const token = crypto.randomUUID();
+  const now = Math.floor(Date.now() / 1000);
+  const expires = now + 60 * 60 * 24 * 90; // 90 days
 
-  // Store the session in Cloudflare D1
   await env.DB.prepare(
-    "INSERT INTO sessions (token, created_at) VALUES (?, strftime('%s','now'))"
-  ).bind(token).run();
+    "INSERT INTO sessions (token, created_at, expires_at) VALUES (?, ?, ?)"
+  )
+    .bind(token, now, expires)
+    .run();
 
-  return new Response(JSON.stringify({ token }), {
-    headers: { "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({ token }),
+    { status: 200, headers: { "Content-Type": "application/json" } }
+  );
 }
