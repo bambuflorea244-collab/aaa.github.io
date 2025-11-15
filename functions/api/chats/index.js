@@ -1,8 +1,7 @@
 // functions/api/chats/index.js
-import { requireAuth } from "../../_utils";
+import { requireAuth } from "../_utils";
 
 function generateChatApiKey() {
-  // short, random per-chat key (you can make this longer if you want)
   return "chat_" + crypto.randomUUID().replace(/-/g, "");
 }
 
@@ -35,10 +34,13 @@ export async function onRequestPost(context) {
 
     const id = crypto.randomUUID();
     const apiKey = generateChatApiKey();
+    const now = Math.floor(Date.now() / 1000);
 
     await env.DB.prepare(
-      "INSERT INTO chats (id, title, folder_id, api_key, system_prompt) VALUES (?, ?, ?, ?, ?)"
-    ).bind(id, title, folderId, apiKey, systemPrompt).run();
+      "INSERT INTO chats (id, title, folder_id, api_key, system_prompt, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+    )
+      .bind(id, title, folderId, apiKey, systemPrompt, now)
+      .run();
 
     return Response.json({ id, title, folder_id: folderId, api_key: apiKey });
   } catch (err) {
