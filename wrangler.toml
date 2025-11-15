@@ -1,15 +1,5 @@
-name = "private-gemini-console"
-main = "functions/index.js"
-compatibility_date = "2024-05-01"
+name = "private-ai"
+pages_build_output_dir = "dist"
 
 [vars]
-# MASTER_PASSWORD is configured in Cloudflare dashboard as a secret
-
-[[d1_databases]]
-binding = "DB"
-database_name = "private_ai_db"
-database_id = "YOUR_D1_DB_ID" # optional for local
-
-[[r2_buckets]]
-binding = "FILES"
-bucket_name = "private-ai-files"
+MASTER_PASSWORD = ""
