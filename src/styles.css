@@ -218,7 +218,7 @@ body {
   box-shadow: 0 0 16px rgba(255, 120, 0, 0.5);
 }
 
-.chat-item:hover:not(.active)) {
+.chat-item:hover:not(.active) {
   background: #140506;
 }
 
@@ -238,6 +238,49 @@ body {
   border-radius: 999px;
   padding: 4px 6px;
   align-self: center;
+}
+
+/* Folder tree */
+
+.folder-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.folder-toggle {
+  background: transparent;
+  border: none;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.folder-toggle:hover .folder-name {
+  color: var(--text);
+}
+
+.folder-caret {
+  font-size: 10px;
+}
+
+.folder-icon {
+  font-size: 13px;
+}
+
+.folder-name {
+  font-size: 12px;
+}
+
+.delete-folder-btn {
+  border-radius: 999px;
+  padding: 3px 6px;
+  font-size: 11px;
 }
 
 /* Main */
@@ -428,7 +471,7 @@ body {
   }
 }
 
-/* Modal Backdrop */
+/* Modals */
 
 .modal-backdrop {
   position: fixed;
@@ -440,7 +483,7 @@ body {
   z-index: 40;
 }
 
-/* NEW: Scrollable modal */
+/* Scrollable modal */
 .modal {
   width: 100%;
   max-width: 440px;
@@ -452,20 +495,18 @@ body {
     0 0 46px rgba(0, 0, 0, 0.9);
   padding: 18px 18px 16px;
 
-  max-height: 80vh;       /* NEW */
-  overflow-y: auto;       /* NEW */
+  max-height: 80vh;
+  overflow-y: auto;
 }
 
-/* NEW: Orange neon scrollbar */
+/* Orange scrollbar */
 .modal::-webkit-scrollbar {
   width: 8px;
 }
-
 .modal::-webkit-scrollbar-thumb {
   background: var(--accent);
   border-radius: 4px;
 }
-
 .modal::-webkit-scrollbar-track {
   background: #150b0d;
 }
